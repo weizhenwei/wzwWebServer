@@ -8,11 +8,16 @@
  * replace tab with space: %retab!
  */
 
+#include <locale.h>
+
 #include "wsocket.h"
 
 
 int main(int argc, char *argv[])
 {
+    // set locale according current environment;
+    setlocale(LC_ALL, "");
+
     mainLoop();
 
     return 0;
