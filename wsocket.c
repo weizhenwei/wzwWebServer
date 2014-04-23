@@ -12,19 +12,26 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/epoll.h>
 #include <unistd.h>
+#include <strings.h>
 #include <string.h>
+#include <errno.h>
 
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <fcntl.h>
 
 #include "wsocket.h"
 #include "whttp.h"
 
 
-int newSocket(void)
+static int newSocket(void)
 {
-    int val = 1;
+    int reuse = 1;
+    int sendbuffer = SENDBUF;
+    int recvbuffer = RECVBUF;
+
     int sockfd = socket(AF_INET, SOCK_STREAM, 0);
 
     if (sockfd == -1) {
@@ -32,18 +39,26 @@ int newSocket(void)
         return -1;
     }
 
-    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &val, sizeof(int));
+    // set sockfd to reuse address, and set its send && recv buffer
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+    setsockopt(sockfd, SOL_SOCKET, SO_SNDBUF, &sendbuffer, sizeof(sendbuffer));
+    setsockopt(sockfd, SOL_SOCKET, SO_RCVBUF, &recvbuffer, sizeof(recvbuffer));
+
+    // set fd to nonblocking
+    int old = fcntl(sockfd, F_GETFL);
+    int new = old | O_NONBLOCK;
+    fcntl(sockfd, F_SETFL, new);
 
     return sockfd;
 }
 
-void closeSocket(int sockfd)
+static void closeSocket(int sockfd)
 {
     close(sockfd);
 }
 
 
-struct sockaddr *newAddress()
+static struct sockaddr *newAddress()
 {
     struct sockaddr_in *addr =
         (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
@@ -53,6 +68,7 @@ struct sockaddr *newAddress()
         return NULL;
     }
 
+    bzero(addr, sizeof(*addr));
     //in_addr_t bind_addr = inet_addr(BIND_ADDR);
     //network byte order
     addr->sin_family = AF_INET;
@@ -62,7 +78,7 @@ struct sockaddr *newAddress()
     return (struct sockaddr *) addr;
 }
 
-void releaseAddress(struct sockaddr *addr)
+static void releaseAddress(struct sockaddr *addr)
 {
     if (addr) {
         free(addr);
@@ -70,7 +86,7 @@ void releaseAddress(struct sockaddr *addr)
 }
 
 
-int bindAddress(int sockfd, struct sockaddr *addr)
+static int bindAddress(int sockfd, struct sockaddr *addr)
 {
     int ret = bind(sockfd, addr, sizeof(struct sockaddr));
     if (ret == -1) {
@@ -81,7 +97,7 @@ int bindAddress(int sockfd, struct sockaddr *addr)
     return 0;
 }
 
-int listenAddress(int sockfd)
+static int listenAddress(int sockfd)
 {
     int ret = listen(sockfd, LISTEN_BACKLOG);
     if (ret == -1) {
@@ -92,16 +108,99 @@ int listenAddress(int sockfd)
     return 0;
 }
 
-int acceptConnection(int sockfd, struct sockaddr *clientAddress)
+static int acceptConnection(int sockfd, struct sockaddr *clientAddress)
 {
-    int addrlen = sizeof(clientAddress);
+    int addrlen = sizeof(*clientAddress);
     int clientfd = accept(sockfd, clientAddress, &addrlen);
     if (clientfd == -1) {
         perror("accept client sock error:");
         return -1;
     }
+
+    return clientfd;
 }
 
+static int newEpollSocket(void)
+{
+    int epollfd = epoll_create(5);
+
+    if (epollfd == -1) {
+        perror("can not create epoll socket:");
+        return -1;
+    }
+
+    return epollfd;
+}
+
+static int addSockfd(int epollfd, int fd)
+{
+    struct epoll_event event;
+    event.data.fd = fd;
+    event.events = EPOLLIN | EPOLLET; //Read and Edge Trigger
+
+    epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
+}
+
+static void handleEvent(int epollfd, int sockfd, struct epoll_event *events, int nevents, int *count)
+{
+    char buffer[BUFFSIZE];
+    int i = 0;
+
+    for(i = 0; i < nevents; i++) {
+	int fd = events[i].data.fd;
+
+	if(fd == sockfd) { //new client arrival
+
+	    printf("new client arrival\n");
+
+	    struct sockaddr_in *clientAddr = (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
+	    if (clientAddr == NULL) {
+		printf("malloc client address error!\n");
+		return;
+	    }
+	    bzero(clientAddr, sizeof(*clientAddr));
+
+	    int clientfd = acceptConnection(sockfd, (struct sockaddr *)clientAddr);
+	    addSockfd(epollfd, clientfd);
+	    free(clientAddr);
+	} else if (events[i].events & EPOLLIN) { // read events happened
+
+	    printf("EPOLLIN happened\n");
+	    while (1) {
+
+		memset(buffer, '\0', BUFFSIZE);
+		int ret = recv(fd, buffer, BUFFSIZE, 0);
+		if (ret == -1) {
+		    if ((errno = EAGAIN) || (errno == EWOULDBLOCK)) {
+			printf("epoll read later\n");
+			break;
+		    }
+		    closeSocket(fd);
+		    break;
+		} else if (ret == 0) {
+		    closeSocket(fd);
+		} else {
+		    printf("read from client:\n%s\n", buffer);
+
+		    if (*count % 2 == 0) {
+			sendHello(fd, hellowHTML);
+		    } else {
+			sendHello(fd, hellowWorld);
+		    }
+
+		    *count++;
+
+		    closeSocket(fd); //remember to close client fd!
+		}
+
+	    } // while
+	} else {
+	    printf("something unknown happend!\n");
+
+	}
+    } // for
+
+}
 
 int mainLoop()
 {
@@ -110,32 +209,22 @@ int mainLoop()
     bindAddress(serverfd, serverAddr);
     listenAddress(serverfd);
 
+    struct epoll_event events[MAX_EPOLL_EVENT];
+    int epollfd = newEpollSocket();
+
     printf("begin to work\n");
     int count = 0;
+    addSockfd(epollfd, serverfd);
     while (1) {
-        int clientfd = acceptConnection(serverfd, clientAddr);
-        
-        char buffer[1024];
-        memset(buffer, 0, 1024);
 
-        int readlen = read(clientfd, buffer, 1024);
-        if (readlen == -1) {
-            perror("read from client error:");
-            break;
-        }
-
-        printf("read from client:\n%s\n", buffer);
-
-        if (count % 2 == 0) {
-            sendHello(clientfd, hellowHTML);
-        } else {
-            sendHello(clientfd, hellowWorld);
-        }
-
-        count++;
-
-        closeSocket(clientfd); //remember to close client fd!
-    }
+	int ret = epoll_wait(epollfd, events, MAX_EPOLL_EVENT, -1);
+	printf("after epoll wait\n");
+	if (ret < 0) {
+	    printf("epoll failure\n");
+	} else {
+	    handleEvent(epollfd, serverfd, events, ret, &count);
+	}
+    } // while
 
     closeSocket(serverfd);
     releaseAddress(serverAddr);
