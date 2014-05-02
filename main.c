@@ -11,12 +11,16 @@
 #include <locale.h>
 
 #include "wsocket.h"
+#include "wsignal.h"
 
 
 int main(int argc, char *argv[])
 {
     // set locale according current environment;
     setlocale(LC_ALL, "");
+
+    // init signal
+    signal_init();
 
     mainLoop();
 

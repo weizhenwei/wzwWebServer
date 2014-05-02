@@ -62,13 +62,12 @@ static struct sockaddr *newAddress()
 {
     struct sockaddr_in *addr =
         (struct sockaddr_in *)malloc(sizeof(struct sockaddr_in));
-
     if (addr == NULL) {
         printf("malloc struct sockaddr_in error!\n");
         return NULL;
     }
 
-    bzero(addr, sizeof(*addr));
+    bzero(addr, sizeof(struct sockaddr_in));
     //in_addr_t bind_addr = inet_addr(BIND_ADDR);
     //network byte order
     addr->sin_family = AF_INET;
@@ -82,6 +81,8 @@ static void releaseAddress(struct sockaddr *addr)
 {
     if (addr) {
         free(addr);
+    } else {
+	printf("Error: An NULL address to free!\n");
     }
 }
 
@@ -135,6 +136,10 @@ static int newEpollSocket(void)
 static int addSockfd(int epollfd, int fd)
 {
     struct epoll_event event;
+    // if we don't empty struct event, 
+    // valgrind will report an error of uninitialised byte.
+    bzero(&event, sizeof(event)); 
+
     event.data.fd = fd;
     event.events = EPOLLIN | EPOLLET; //Read and Edge Trigger
 
