@@ -23,5 +23,7 @@ AC_CHECK_HEADERS([arpa/inet.h fcntl.h locale.h netinet/in.h stdlib.h string.h st
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([bzero memset setlocale socket])
 
-AC_CONFIG_FILES([Makefile])
-AC_OUTPUT
+#AC_CONFIG_FILES([Makefile])
+
+#Attention: this is import, list the Makefile need to generate
+AC_OUTPUT(Makefile src/Makefile)
