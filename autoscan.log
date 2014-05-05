@@ -1,0 +1,2 @@
+autoscan: warning: missing AC_CHECK_HEADERS([syslog.h]) wanted by: 
+	src/wlog.h:14

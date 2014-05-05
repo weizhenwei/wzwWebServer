@@ -46,7 +46,7 @@ CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_wzwWebServer_OBJECTS = main.$(OBJEXT) whttp.$(OBJEXT) \
-	wsignal.$(OBJEXT) wsocket.$(OBJEXT)
+	wsignal.$(OBJEXT) wsocket.$(OBJEXT) wlog.$(OBJEXT)
 wzwWebServer_OBJECTS = $(am_wzwWebServer_OBJECTS)
 wzwWebServer_LDADD = $(LDADD)
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
@@ -150,9 +150,10 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign
 wzwWebServer_SOURCES = main.c \
-		       whttp.c whttp.h \
-		       wsignal.c wsignal.h \
-		       wsocket.c wsocket.h
+		       whttp.h whttp.c \
+		       wsignal.h wsignal.c \
+		       wsocket.h wsocket.c \
+		       wlog.h wlog.c
 
 all: all-am
 
@@ -237,6 +238,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/whttp.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/wlog.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/wsignal.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/wsocket.Po@am__quote@
 

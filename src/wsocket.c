@@ -24,6 +24,7 @@
 
 #include "wsocket.h"
 #include "whttp.h"
+#include "wlog.h"
 
 
 static int newSocket(void)
@@ -209,6 +210,8 @@ static void handleEvent(int epollfd, int sockfd, struct epoll_event *events, int
 
 int mainLoop()
 {
+    syslog(LOG_INFO, "Starting main loop.");
+
     int serverfd = newSocket();
     serverAddr = newAddress();
     bindAddress(serverfd, serverAddr);

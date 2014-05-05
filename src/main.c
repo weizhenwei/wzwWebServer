@@ -12,6 +12,7 @@
 
 #include "wsocket.h"
 #include "wsignal.h"
+#include "wlog.h"
 
 
 int main(int argc, char *argv[])
@@ -21,8 +22,12 @@ int main(int argc, char *argv[])
 
     // init signal
     signal_init();
+    syslog_open();
 
     mainLoop();
+
+    syslog(LOG_INFO, "Close program.");
+    syslog_close();
 
     return 0;
 }
