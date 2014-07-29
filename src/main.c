@@ -24,6 +24,7 @@ int main(int argc, char *argv[])
     signal_init();
     syslog_open();
 
+    // main loop function of the program
     mainLoop();
 
     syslog(LOG_INFO, "Close program.");
